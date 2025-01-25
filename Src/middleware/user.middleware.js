@@ -2,7 +2,7 @@ import userModels from "../models/user.models.js";
 import bcryptjs from "bcryptjs";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
-import crypto from "crypto";  // Required for generating random passwords
+import crypto from "crypto"; // Required for generating random passwords
 
 // Helper functions for token generation
 const generateAccessToken = (user) => {
@@ -27,26 +27,14 @@ const transporter = nodemailer.createTransport({
   port: 587,
   secure: false, // Use true for 465 port, otherwise false
   auth: {
-    user: "jettie.douglas@ethereal.email", // Replace with environment variable for better security
-    pass:  "PrzSkyZdqPtzPBVEaX", // Use environment variable
+    user: process.env.EMAIL_USER || "kyle.glover85@ethereal.email", // Replace with environment variable for better security
+    pass: process.env.EMAIL_PASS || "AFwsrJmbW9M1uGQCxZ", // Use environment variable
   },
 });
-// process.env.EMAIL_USER || 
-// process.env.EMAIL_PASS ||
+
 // Generate a random password function
 const generateRandomPassword = () => {
   return crypto.randomBytes(8).toString("hex"); // Generates an 8-byte hexadecimal password
-};
-
-// Send Email function
-const sendEmail = async (email, name, randomPassword) => {
-  return transporter.sendMail({
-    from: '"Your Name" <your-email@example.com>',
-    to: email, // The recipient email from the user request
-    subject: "Welcome to the platform!",
-    text: `Hello ${name}, your password is: ${randomPassword}`,
-    html: `<b>Hello ${name}, your password is: ${randomPassword}</b>`,
-  });
 };
 
 // Create user function
@@ -85,7 +73,13 @@ export const createUser = async (req, res) => {
     });
 
     // Send email with the random password
-    const info = await sendEmail(email, name, randomPassword);
+    const info = await transporter.sendMail({
+      from: '"Kyle Glover 👻" <kyle.glover85@ethereal.email>', // sender address
+      to: email, // send to the user's email
+      subject: "Welcome to the platform!",
+      text: `Hi ${name}, welcome to our platform! Your password is: ${randomPassword}`, // Plain text body
+      html: `<b>Hi ${name},</b><p>Welcome to our platform! Your password is: <strong>${randomPassword}</strong></p>`, // HTML body
+    });
 
     console.log("Message sent: %s", info.messageId);
 
@@ -100,51 +94,13 @@ export const createUser = async (req, res) => {
   }
 };
 
-// Reset password function
-export const resetPassword = async (req, res) => {
-  const { email } = req.body;
-
-  if (!email) {
-    return res.status(400).json({ message: "Email is required" });
-  }
-
-  try {
-    // Find the user by email
-    const user = await userModels.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Generate a new random password
-    const newRandomPassword = generateRandomPassword();
-    
-    // Hash the new password
-    const hashPassword = await bcryptjs.hash(newRandomPassword, 10);
-
-    // Update the user's password with the new one
-    user.password = hashPassword;
-    await user.save();
-
-    // Send email with the new password
-    const info = await sendEmail(email, user.name, newRandomPassword);
-    console.log("Password reset email sent: %s", info.messageId);
-
-    res.status(200).json({
-      emailSent: true,
-      emailId: info.messageId,
-      message: "Password reset successfully. Please check your email.",
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// Log in user function
+// Step 1: Login and check if password matches
 export const logInUser = async (req, res) => {
-  const { email, password } = req.body;
+  const { email, cnic, password } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).json({ message: "Email and password are required" });
+  // Validate required fields
+  if (!email || !cnic || !password) {
+    return res.status(400).json({ message: "All fields are required" });
   }
 
   try {
@@ -160,7 +116,18 @@ export const logInUser = async (req, res) => {
       return res.status(401).json({ message: "Invalid password" });
     }
 
-    // Generate tokens
+    // Check if the user is using the temporary password
+    const isTemporaryPassword = password === user.password;
+    if (isTemporaryPassword) {
+      // If the password is temporary, prompt the user to reset it
+      return res.status(200).json({
+        message: "Login successful. Please reset your password.",
+        promptChangePassword: true,
+        user,
+      });
+    }
+
+    // If the password is valid and not temporary, generate access and refresh tokens
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
 
@@ -172,7 +139,62 @@ export const logInUser = async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
-    res.status(200).json({ message: "Login successful", user, accessToken });
+    res.status(200).json({
+      message: "Login successful",
+      user,
+      accessToken,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Step 2: Change password after resetting
+export const changePassword = async (req, res) => {
+  const { email, currentPassword, newPassword } = req.body;
+
+  // Validate required fields
+  if (!email || !currentPassword || !newPassword) {
+    return res.status(400).json({ message: "All fields are required" });
+  }
+
+  try {
+    // Find the user by email
+    const user = await userModels.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Verify the current password
+    const isPasswordValid = await bcryptjs.compare(currentPassword, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: "Current password is incorrect" });
+    }
+
+    // Hash the new password
+    const hashedPassword = await bcryptjs.hash(newPassword, 10);
+
+    // Update the password in the database
+    user.password = hashedPassword;
+    await user.save();
+
+    // Now that the password is reset, log the user in with the new password
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
+
+    // Set refresh token as a cookie
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
+    res.status(200).json({
+      message: "Password reset successfully and logged in",
+      user,
+      accessToken,
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -221,16 +243,6 @@ export const logoutUser = async (req, res) => {
       sameSite: "strict",
     });
     res.json({ message: "Logout successful" });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// Get all users function
-export const getAllUsers = async (req, res) => {
-  try {
-    const users = await userModels.find();
-    res.json(users);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
