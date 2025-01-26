@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import connectDB from "./src/db/index.js";
-import userRouter from "./src/routes/user.routes.js";
+import userRouter from "./src/routes/user.route.js";
 import guarantorRouter from "./src/routes/guarantor.routes.js";
 import loanRouter from "./src/routes/loan.routes.js";
 import cookieParser from "cookie-parser";
@@ -15,10 +15,12 @@ const app = express();
 const port = process.env.PORT || 5000;
 
 // CORS configuration
-app.use(cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173", // Use env variable for client URL
-    credentials: true
-}));
+// app.use(cors({
+//     origin: process.env.CLIENT_URL || "http://localhost:5173", // Use env variable for client URL
+//     credentials: true
+// }));
+
+app.use(cors())
 
 // Middleware
 app.use(cookieParser());

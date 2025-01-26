@@ -6,7 +6,7 @@ import {
   updateGuarantor,
   deleteGuarantor,
   getGuarantorsForLoan,
-} from "../controllers/guarantor.controller.js";
+} from "../controllers/guarantor.controlers.js";
 
 const router = express.Router();
 

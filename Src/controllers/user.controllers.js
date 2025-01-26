@@ -102,10 +102,10 @@ export const createUser = async (req, res) => {
 
 // Reset password function
 export const resetPassword = async (req, res) => {
-  const { email } = req.body;
+  const { email, newPassword } = req.body;
 
-  if (!email) {
-    return res.status(400).json({ message: "Email is required" });
+  if (!newPassword) {
+    return res.status(400).json({ message: "new password are required" });
   }
 
   try {
@@ -115,24 +115,16 @@ export const resetPassword = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Generate a new random password
-    const newRandomPassword = generateRandomPassword();
-    
     // Hash the new password
-    const hashPassword = await bcryptjs.hash(newRandomPassword, 10);
+    const hashedPassword = await bcryptjs.hash(newPassword, 10);
 
-    // Update the user's password with the new one
-    user.password = hashPassword;
+    // Update the user's password with the new hashed password
+    user.password = hashedPassword;
     await user.save();
 
-    // Send email with the new password
-    const info = await sendEmail(email, user.name, newRandomPassword);
-    console.log("Password reset email sent: %s", info.messageId);
-
+    // Send a response to the user
     res.status(200).json({
-      emailSent: true,
-      emailId: info.messageId,
-      message: "Password reset successfully. Please check your email.",
+      message: "Password reset successfully. You can now log in with the new password.",
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
