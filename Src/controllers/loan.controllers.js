@@ -14,25 +14,21 @@ const calculateLoanEMI = (loanAmount, annualInterestRate, loanPeriodInMonths) =>
 
 // Create loan function
 export const createLoan = async (req, res) => {
-  const { user, category, subcategory, amount, loanPeriod, guarantors } = req.body;
+  const { category, subcategory, amount, loanPeriod } = req.body;
 
-  if (!user || !category || !subcategory || !amount || !loanPeriod) {
+  if ( !category || !subcategory || !amount || !loanPeriod) {
     return res.status(400).json({ message: "All fields are required" });
   }
 
   try {
-    // Create new loan document
     const loan = await Loan.create({
-      user,
       category,
       subcategory,
       amount,
       loanPeriod,
-      guarantors,
     });
 
-    // Calculate EMI
-    const emi = calculateLoanEMI(amount, 6, loanPeriod); // Example: 6% annual interest rate
+    const emi = calculateLoanEMI(amount, 6, loanPeriod); 
     const totalRepayment = emi * loanPeriod;
 
     res.status(201).json({
@@ -46,24 +42,20 @@ export const createLoan = async (req, res) => {
   }
 };
 
-// Add a guarantor to a loan
 export const addGuarantorToLoan = async (req, res) => {
   const { loanId, guarantorId } = req.body;
 
   try {
-    // Check if the loan exists
     const loan = await Loan.findById(loanId);
     if (!loan) {
       return res.status(404).json({ message: "Loan not found" });
     }
 
-    // Check if the guarantor exists
     const guarantor = await Guarantor.findById(guarantorId);
     if (!guarantor) {
       return res.status(404).json({ message: "Guarantor not found" });
     }
 
-    // Check if the guarantor is already in the loan
     if (loan.guarantors.includes(guarantorId)) {
       return res.status(400).json({ message: "Guarantor already added to this loan" });
     }

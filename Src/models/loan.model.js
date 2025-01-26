@@ -14,7 +14,7 @@ const loanSchema = new mongoose.Schema({
         required: true,
     },
     loanPeriod: {
-        type: Number,
+        type: String,
         required: true,
     },
     guarantors: [
